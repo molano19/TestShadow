@@ -11,14 +11,14 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { title, due, priority } = body || {};
+    const { title, due, priority, step } = body || {};
     if (!title || typeof title !== "string") {
       return NextResponse.json({ error: "title is required" }, { status: 400 });
     }
 
     let todo;
     try {
-      todo = await createTodo({ title: title.trim(), due, priority });
+      todo = await createTodo({ title: title.trim(), due, priority, step });
       console.log("Created todo:", todo);
     } catch (err) {
       // Log the underlying error so you can inspect Supabase response in dev

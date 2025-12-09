@@ -10,6 +10,7 @@ export type Task = {
   createdAt: string; // ISO
   due?: string; // YYYY-MM-DD
   priority: Priority;
+  step?: string; // optional step/subtask
 };
 
 const DATA_DIR = path.join(process.cwd(), "data");

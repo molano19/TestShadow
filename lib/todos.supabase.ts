@@ -1,6 +1,20 @@
 import { supabaseAdmin } from "./supabase";
 import type { Task as FsTask, Priority } from "./todos";
 
+// Cache whether the optional 'step' column exists in the todos table.
+let stepAvailable: boolean | null = null;
+
+async function detectStepColumn() {
+  if (stepAvailable !== null) return stepAvailable;
+  try {
+    const { error } = await supabaseAdmin.from("todos").select("step").limit(1);
+    stepAvailable = !error;
+  } catch (e) {
+    stepAvailable = false;
+  }
+  return stepAvailable;
+}
+
 type Row = {
   id: string;
   title: string;
@@ -8,6 +22,7 @@ type Row = {
   created_at: string;
   due?: string | null;
   priority: Priority;
+  step?: string | null;
 };
 
 function mapRowToTask(r: Row): FsTask {
@@ -18,55 +33,87 @@ function mapRowToTask(r: Row): FsTask {
     createdAt: r.created_at,
     due: r.due ?? undefined,
     priority: r.priority,
+    step: r.step ?? undefined,
   };
 }
 
 export async function getAll() {
+  const hasStep = await detectStepColumn();
+  const selectCols = hasStep
+    ? "id,title,completed,created_at,due,priority,step"
+    : "id,title,completed,created_at,due,priority";
+
   const { data, error } = await supabaseAdmin
     .from("todos")
-    .select("id,title,completed,created_at,due,priority")
+    .select(selectCols)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (data || []).map(mapRowToTask);
+  return (data || []).map(mapRowToTask as any);
 }
 
 export async function getById(id: string) {
-  const { data, error } = await supabaseAdmin.from("todos").select("*").eq("id", id).maybeSingle();
-  if (error) throw error;
-  if (!data) return undefined;
-  return mapRowToTask(data);
+  const hasStep = await detectStepColumn();
+  const selectCols = hasStep
+    ? "id,title,completed,created_at,due,priority,step"
+    : "id,title,completed,created_at,due,priority";
+
+  const { data, error } = await supabaseAdmin.from("todos").select(selectCols).eq("id", id).maybeSingle();
+    if (error) throw error;
+    if (!data) return undefined;
+    return mapRowToTask(data as unknown as Row);
 }
 
-export async function createTodo({ title, due, priority = "Medium" }: { title: string; due?: string; priority?: Priority; }) {
+export async function createTodo({ title, due, priority = "Medium", step }: { title: string; due?: string; priority?: Priority; step?: string; }) {
   const id = String(Date.now()) + Math.random().toString(36).slice(2, 8);
-  const payload = {
+  const hasStep = await detectStepColumn();
+  const payload: any = {
     id,
     title,
     completed: false,
     created_at: new Date().toISOString(),
     due: due ?? null,
     priority: priority ?? "Medium",
-  } as const;
+  };
 
-  const { data, error } = await supabaseAdmin.from("todos").insert(payload).select().single();
-  if (error) throw error;
-  return mapRowToTask(data as Row);
+  if (hasStep && step) payload.step = step;
+
+  const selectCols = hasStep
+    ? "id,title,completed,created_at,due,priority,step"
+    : "id,title,completed,created_at,due,priority";
+
+  const { data, error } = await supabaseAdmin
+    .from("todos")
+    .insert(payload)
+    .select(selectCols)
+    .single();
+    if (error) throw error;
+    return mapRowToTask(data as unknown as Row);
 }
 
-export async function updateTodo(id: string, patch: Partial<Pick<FsTask, "title" | "completed" | "due" | "priority">>) {
+export async function updateTodo(id: string, patch: Partial<Pick<FsTask, "title" | "completed" | "due" | "priority" | "step">>) {
   // Map createdAt -> created_at is not needed; we only update provided fields
+  const hasStep = await detectStepColumn();
   const dbPatch: any = {};
   if (patch.title !== undefined) dbPatch.title = patch.title;
   if (patch.completed !== undefined) dbPatch.completed = patch.completed;
   if (patch.due !== undefined) dbPatch.due = patch.due ?? null;
   if (patch.priority !== undefined) dbPatch.priority = patch.priority;
+  if (hasStep && patch.step !== undefined) dbPatch.step = patch.step ?? null;
 
   console.log("updateTodo - id:", id, "dbPatch:", dbPatch);
-  const { data, error } = await supabaseAdmin.from("todos").update(dbPatch).eq("id", id).select().maybeSingle();
+  const selectCols = hasStep
+    ? "id,title,completed,created_at,due,priority,step"
+    : "id,title,completed,created_at,due,priority";
+  const { data, error } = await supabaseAdmin
+    .from("todos")
+    .update(dbPatch)
+    .eq("id", id)
+    .select(selectCols)
+    .maybeSingle();
   console.log("updateTodo - response data:", data, "error:", error);
   if (error) throw error;
-  if (!data) return undefined;
-  return mapRowToTask(data as Row);
+    if (!data) return undefined;
+    return mapRowToTask(data as unknown as Row);
 }
 
 export async function deleteTodo(id: string) {
