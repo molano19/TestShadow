@@ -4,6 +4,35 @@ import React, { useEffect, useRef, useState } from "react";
 
 type Priority = "Low" | "Medium" | "High";
 
+// Simple markdown formatter - converts markdown to HTML
+function renderMarkdown(text: string): string {
+  let html = text;
+  
+  // Headers: # Title -> <h3>Title</h3>, ## Title -> <h4>Title</h4>
+  html = html.replace(/^### (.*?)$/gm, '<h5 class="font-bold mt-2 mb-1">$1</h5>');
+  html = html.replace(/^## (.*?)$/gm, '<h4 class="font-bold mt-2 mb-1">$1</h4>');
+  html = html.replace(/^# (.*?)$/gm, '<h3 class="font-bold mt-2 mb-1">$1</h3>');
+  
+  // Bold: **text** or __text__
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__(.*?)__/g, '<strong>$1</strong>');
+  
+  // Italic: *text* or _text_
+  html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+  html = html.replace(/_(.*?)_/g, '<em>$1</em>');
+  
+  // Code blocks: `code`
+  html = html.replace(/`(.*?)`/g, '<code class="bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs font-mono">$1</code>');
+  
+  // Lists: - item or * item
+  html = html.replace(/^\s*[-*]\s+(.*?)$/gm, '<li class="ml-4">$1</li>');
+  
+  // Line breaks
+  html = html.replace(/\n\n/g, '</p><p>');
+  
+  return html;
+}
+
 type Task = {
   id: string;
   title: string;
@@ -462,10 +491,13 @@ export default function Home() {
                           </h3>
                           
                           {t.step && (
-                            <div className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                            <div className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed prose prose-sm dark:prose-invert max-w-none">
                               {expandedId === t.id ? (
                                 <>
-                                  <p className="whitespace-pre-wrap">{t.step}</p>
+                                  <div 
+                                    dangerouslySetInnerHTML={{ __html: renderMarkdown(t.step) }}
+                                    className="space-y-2"
+                                  />
                                   {t.step.length > SHORT_STEP_LEN && (
                                     <button onClick={() => toggleExpand(t.id)} className="text-indigo-600 dark:text-indigo-400 font-medium mt-1 hover:underline">
                                       Show less
